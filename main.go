@@ -9,7 +9,10 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
+
+	"gopkg.in/yaml.v2"
 )
 
 /*
@@ -18,6 +21,23 @@ import (
 
 type requestPayloadStruct struct {
 	ProxyCondition string `json:"proxy_condition"`
+}
+
+type proxyConfig struct {
+	Proxy struct {
+		Listen struct {
+			Address string `yaml:"address"`
+			Port    string `yaml:"port"`
+		} `yaml:"listen"`
+		Services []struct {
+			Name   string `yaml:"name"`
+			Domain string `yaml:"domain"`
+			Hosts  []struct {
+				Address string `yaml:"address"`
+				Port    string `yaml:"port"`
+			} `yaml:"hosts"`
+		} `yaml:"services"`
+	} `yaml:"proxy"`
 }
 
 /*
@@ -71,12 +91,13 @@ func logRequestPayload(requestionPayload requestPayloadStruct, proxyUrl string) 
 }
 
 // Log the env variables required for a reverse proxy
-func logSetup() {
+func logSetup(serverAddress string) {
 	a_condtion_url := os.Getenv("A_CONDITION_URL")
 	b_condtion_url := os.Getenv("B_CONDITION_URL")
 	default_condtion_url := os.Getenv("DEFAULT_CONDITION_URL")
 
-	log.Printf("Server will run on: %s\n", getListenAddress())
+	// log.Printf("Server will run on: %s\n", getListenAddress())
+	log.Printf("Server will run on: %s\n", serverAddress)
 	log.Printf("Redirecting to A url: %s\n", a_condtion_url)
 	log.Printf("Redirecting to B url: %s\n", b_condtion_url)
 	log.Printf("Redirecting to Default url: %s\n", default_condtion_url)
@@ -148,13 +169,32 @@ func handleRequestAndRedirect(res http.ResponseWriter, req *http.Request) {
 	Entry
 */
 
+func generateConfig(c *proxyConfig) {
+	filename, _ := filepath.Abs("./config.yml")
+	yamlFile, err := ioutil.ReadFile(filename)
+
+	if err != nil {
+		panic(err)
+	}
+
+	err = yaml.Unmarshal(yamlFile, c)
+	if err != nil {
+		panic(err)
+	}
+}
+
 func main() {
+	// Read config file
+	var config proxyConfig
+	generateConfig(&config)
+	proxylisten := config.Proxy.Listen.Address + ":" + config.Proxy.Listen.Port
+
 	// Log setup values
-	logSetup()
+	logSetup(proxylisten)
 
 	// start server
 	http.HandleFunc("/", handleRequestAndRedirect)
-	if err := http.ListenAndServe(getListenAddress(), nil); err != nil {
+	if err := http.ListenAndServe(proxylisten, nil); err != nil {
 		panic(err)
 	}
 }
