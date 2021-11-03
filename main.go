@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	// "github.com/kr/pretty"
 	"gopkg.in/yaml.v2"
 )
 
@@ -45,22 +47,16 @@ type proxyConfig struct {
 */
 
 // Get env var or default
-func getEnv(key, fallback string) string {
-	if value, ok := os.LookupEnv(key); ok {
-		return value
-	}
-	return fallback
-}
+// func getEnv(key, fallback string) string {
+// 	if value, ok := os.LookupEnv(key); ok {
+// 		return value
+// 	}
+// 	return fallback
+// }
 
 /*
 	Getters
 */
-
-// Get the port to listen on
-func getListenAddress() string {
-	port := getEnv("PORT", "1338")
-	return ":" + port
-}
 
 // Get the url for a given proxy condition
 func getProxyUrl(proxyConditionRaw string) string {
@@ -96,7 +92,6 @@ func logSetup(serverAddress string) {
 	b_condtion_url := os.Getenv("B_CONDITION_URL")
 	default_condtion_url := os.Getenv("DEFAULT_CONDITION_URL")
 
-	// log.Printf("Server will run on: %s\n", getListenAddress())
 	log.Printf("Server will run on: %s\n", serverAddress)
 	log.Printf("Redirecting to A url: %s\n", a_condtion_url)
 	log.Printf("Redirecting to B url: %s\n", b_condtion_url)
@@ -156,7 +151,8 @@ func parseRequestBody(request *http.Request) requestPayloadStruct {
 }
 
 // Given a request send it to the appropriate url
-func handleRequestAndRedirect(res http.ResponseWriter, req *http.Request) {
+func proxyOperation(res http.ResponseWriter, req *http.Request) {
+	fmt.Println(req)
 	requestPayload := parseRequestBody(req)
 	url := getProxyUrl(requestPayload.ProxyCondition)
 
@@ -165,35 +161,37 @@ func handleRequestAndRedirect(res http.ResponseWriter, req *http.Request) {
 	serveReverseProxy(url, res, req)
 }
 
-/*
-	Entry
-*/
-
+// Generate config struct
 func generateConfig(c *proxyConfig) {
 	filename, _ := filepath.Abs("./config.yml")
-	yamlFile, err := ioutil.ReadFile(filename)
+	yamlConfigFile, err := ioutil.ReadFile(filename)
 
 	if err != nil {
 		panic(err)
 	}
 
-	err = yaml.Unmarshal(yamlFile, c)
+	err = yaml.Unmarshal(yamlConfigFile, c)
 	if err != nil {
 		panic(err)
 	}
 }
 
+/*
+	Entry
+*/
+
 func main() {
 	// Read config file
 	var config proxyConfig
 	generateConfig(&config)
+	// pretty.Println(config)
 	proxylisten := config.Proxy.Listen.Address + ":" + config.Proxy.Listen.Port
 
 	// Log setup values
 	logSetup(proxylisten)
 
 	// start server
-	http.HandleFunc("/", handleRequestAndRedirect)
+	http.HandleFunc("/", proxyOperation)
 	if err := http.ListenAndServe(proxylisten, nil); err != nil {
 		panic(err)
 	}
