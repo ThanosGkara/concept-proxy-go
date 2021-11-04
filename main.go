@@ -3,15 +3,15 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
+	"time"
 
 	// "github.com/kr/pretty"
 	"gopkg.in/yaml.v2"
@@ -58,32 +58,13 @@ type proxyConfig struct {
 	Getters
 */
 
-// Get the url for a given proxy condition
-func getProxyUrl(proxyConditionRaw string) string {
-	proxyCondition := strings.ToUpper(proxyConditionRaw)
-
-	a_condtion_url := os.Getenv("A_CONDITION_URL")
-	b_condtion_url := os.Getenv("B_CONDITION_URL")
-	default_condtion_url := os.Getenv("DEFAULT_CONDITION_URL")
-
-	if proxyCondition == "A" {
-		return a_condtion_url
-	}
-
-	if proxyCondition == "B" {
-		return b_condtion_url
-	}
-
-	return default_condtion_url
-}
-
 /*
 	Logging
 */
 
 // Log the typeform payload and redirect url
-func logRequestPayload(requestionPayload requestPayloadStruct, proxyUrl string) {
-	log.Printf("proxy_condition: %s, proxy_url: %s\n", requestionPayload.ProxyCondition, proxyUrl)
+func logRequestPayload(requestionPayload requestPayloadStruct) {
+	log.Printf("proxy_condition: %s, proxy_url: %s\n", requestionPayload.ProxyCondition)
 }
 
 // Log the env variables required for a reverse proxy
@@ -101,24 +82,6 @@ func logSetup(serverAddress string) {
 /*
 	Reverse Proxy Logic
 */
-
-// Serve a reverse proxy for a given url
-func serveReverseProxy(target string, res http.ResponseWriter, req *http.Request) {
-	// parse the url
-	url, _ := url.Parse(target)
-
-	// create the reverse proxy
-	proxy := httputil.NewSingleHostReverseProxy(url)
-
-	// Update the headers to allow for SSL redirection
-	req.URL.Host = url.Host
-	req.URL.Scheme = url.Scheme
-	req.Header.Set("X-Forwarded-Host", req.Header.Get("Host"))
-	req.Host = url.Host
-
-	// Note that ServeHttp is non blocking and uses a go routine under the hood
-	proxy.ServeHTTP(res, req)
-}
 
 // Get a json decoder for a given requests body
 func requestBodyDecoder(request *http.Request) *json.Decoder {
@@ -150,15 +113,48 @@ func parseRequestBody(request *http.Request) requestPayloadStruct {
 	return requestPayload
 }
 
+// Serve a reverse proxy for a given url
+func serveReverseProxy(c *proxyConfig, res http.ResponseWriter, req *http.Request) {
+
+	if req.Body != nil {
+		requestPayload := parseRequestBody(req)
+
+		logRequestPayload(requestPayload)
+	}
+
+	// parse the url
+	url, _ := url.Parse(req.Host)
+
+	var service string
+	rand.Seed(time.Now().UnixNano())
+	for _, serv := range c.Proxy.Services {
+		if url.Host == serv.Domain {
+			backend := rand.Intn(len(serv.Hosts))
+			addr := serv.Hosts[backend]
+			service = addr.Address + addr.Port
+		}
+	}
+	url.Host = service
+
+	// create the reverse proxy
+	// proxy := httputil.NewSingleHostReverseProxy(service)
+	proxy := httputil.NewSingleHostReverseProxy(url)
+
+	// Update the headers to allow for SSL redirection
+	req.URL.Host = url.Host
+	req.URL.Scheme = url.Scheme
+	req.Header.Set("X-Forwarded-Host", req.Header.Get("Host"))
+	req.Host = url.Host
+
+	// Note that ServeHttp is non blocking and uses a go routine under the hood
+	proxy.ServeHTTP(res, req)
+}
+
 // Given a request send it to the appropriate url
-func proxyOperation(res http.ResponseWriter, req *http.Request) {
-	fmt.Println(req)
-	requestPayload := parseRequestBody(req)
-	url := getProxyUrl(requestPayload.ProxyCondition)
-
-	logRequestPayload(requestPayload, url)
-
-	serveReverseProxy(url, res, req)
+func proxyOperation(c *proxyConfig) func(res http.ResponseWriter, req *http.Request) {
+	return func(res http.ResponseWriter, req *http.Request) {
+		serveReverseProxy(c, res, req)
+	}
 }
 
 // Generate config struct
@@ -191,7 +187,7 @@ func main() {
 	logSetup(proxylisten)
 
 	// start server
-	http.HandleFunc("/", proxyOperation)
+	http.HandleFunc("/", proxyOperation(&config))
 	if err := http.ListenAndServe(proxylisten, nil); err != nil {
 		panic(err)
 	}
