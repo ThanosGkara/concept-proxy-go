@@ -10,6 +10,8 @@ proxy:
           port: 8090
         - address: "127.0.0.1"
           port: 8091
+        - address: "127.0.0.1"
+          port: 8092
     - name: mock-service-2
       domain: mock-service-2.localhost.local
       hosts:
@@ -17,3 +19,5 @@ proxy:
           port: 9090
         - address: "127.0.0.1"
           port: 9091
+        - address: "127.0.0.1"
+          port: 9092
