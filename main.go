@@ -2,15 +2,17 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
+	// "encoding/json"
+	// "os"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	// "github.com/kr/pretty"
@@ -20,10 +22,6 @@ import (
 /*
 	Structs
 */
-
-type requestPayloadStruct struct {
-	ProxyCondition string `json:"proxy_condition"`
-}
 
 type proxyConfig struct {
 	Proxy struct {
@@ -63,89 +61,59 @@ type proxyConfig struct {
 */
 
 // Log the typeform payload and redirect url
-func logRequestPayload(requestionPayload requestPayloadStruct) {
-	log.Printf("proxy_condition: %s, proxy_url: %s\n", requestionPayload.ProxyCondition)
-}
+func logRequestPayload(request *http.Request) {
 
-// Log the env variables required for a reverse proxy
-func logSetup(serverAddress string) {
-	a_condtion_url := os.Getenv("A_CONDITION_URL")
-	b_condtion_url := os.Getenv("B_CONDITION_URL")
-	default_condtion_url := os.Getenv("DEFAULT_CONDITION_URL")
+	// dec := requestBodyDecoder(request)
+	body, err := ioutil.ReadAll(request.Body)
+	if err == nil {
+		log.Printf("Request payload: \n%s", string(body))
+	}
 
-	log.Printf("Server will run on: %s\n", serverAddress)
-	log.Printf("Redirecting to A url: %s\n", a_condtion_url)
-	log.Printf("Redirecting to B url: %s\n", b_condtion_url)
-	log.Printf("Redirecting to Default url: %s\n", default_condtion_url)
+	// In go lang if you read the request body then any susequent calls
+	// are unable to read the body again
+	request.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 }
 
 /*
 	Reverse Proxy Logic
 */
 
-// Get a json decoder for a given requests body
-func requestBodyDecoder(request *http.Request) *json.Decoder {
-	// Read body to buffer
-	body, err := ioutil.ReadAll(request.Body)
-	if err != nil {
-		log.Printf("Error reading body: %v", err)
-		panic(err)
-	}
-
-	// Because go lang is a pain in the ass if you read the body then any susequent calls
-	// are unable to read the body again....
-	request.Body = ioutil.NopCloser(bytes.NewBuffer(body))
-
-	return json.NewDecoder(ioutil.NopCloser(bytes.NewBuffer(body)))
-}
-
-// Parse the requests body
-func parseRequestBody(request *http.Request) requestPayloadStruct {
-	decoder := requestBodyDecoder(request)
-
-	var requestPayload requestPayloadStruct
-	err := decoder.Decode(&requestPayload)
-
-	if err != nil {
-		panic(err)
-	}
-
-	return requestPayload
-}
-
 // Serve a reverse proxy for a given url
 func serveReverseProxy(c *proxyConfig, res http.ResponseWriter, req *http.Request) {
 
 	if req.Body != nil {
-		requestPayload := parseRequestBody(req)
-
-		logRequestPayload(requestPayload)
+		// requestPayload := parseRequestBody(req)
+		logRequestPayload(req)
 	}
 
 	// parse the url
-	url, _ := url.Parse(req.Host)
+	url_, _ := url.Parse(req.Host)
 
 	var service string
 	rand.Seed(time.Now().UnixNano())
+	dom := strings.Split(url_.String(), ":")[0]
+	fmt.Println(dom[0])
 	for _, serv := range c.Proxy.Services {
-		if url.Host == serv.Domain {
+		if dom == serv.Domain {
 			backend := rand.Intn(len(serv.Hosts))
-			addr := serv.Hosts[backend]
-			service = addr.Address + addr.Port
+			fmt.Println("Forward to service " + serv.Name)
+			service = serv.Hosts[backend].Address + ":" + serv.Hosts[backend].Port
+			break
 		}
 	}
-	url.Host = service
-
+	fmt.Println("Service: " + service)
+	url_.Host = service
+	url_.Scheme = "http"
 	// create the reverse proxy
-	// proxy := httputil.NewSingleHostReverseProxy(service)
-	proxy := httputil.NewSingleHostReverseProxy(url)
+	proxy := httputil.NewSingleHostReverseProxy(url_)
 
 	// Update the headers to allow for SSL redirection
-	req.URL.Host = url.Host
-	req.URL.Scheme = url.Scheme
-	req.Header.Set("X-Forwarded-Host", req.Header.Get("Host"))
-	req.Host = url.Host
+	req.Header.Set("X-Forwarded-Host", dom)
+	req.URL.Host = url_.Host
+	req.URL.Scheme = url_.Scheme
+	req.Host = url_.Host
 
+	fmt.Println("URL after: " + req.URL.String() + "\n")
 	// Note that ServeHttp is non blocking and uses a go routine under the hood
 	proxy.ServeHTTP(res, req)
 }
@@ -161,6 +129,8 @@ func proxyOperation(c *proxyConfig) func(res http.ResponseWriter, req *http.Requ
 func generateConfig(c *proxyConfig) {
 	filename, _ := filepath.Abs("./config.yml")
 	yamlConfigFile, err := ioutil.ReadFile(filename)
+
+	fmt.Printf("Server config: \n%s", yamlConfigFile)
 
 	if err != nil {
 		panic(err)
@@ -180,11 +150,9 @@ func main() {
 	// Read config file
 	var config proxyConfig
 	generateConfig(&config)
+
 	// pretty.Println(config)
 	proxylisten := config.Proxy.Listen.Address + ":" + config.Proxy.Listen.Port
-
-	// Log setup values
-	logSetup(proxylisten)
 
 	// start server
 	http.HandleFunc("/", proxyOperation(&config))
