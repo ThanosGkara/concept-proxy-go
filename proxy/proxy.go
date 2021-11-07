@@ -3,56 +3,20 @@ package proxy
 import (
 	"bytes"
 	"fmt"
+	"go-proxy/lb"
 	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"path/filepath"
 	"strings"
 	"time"
-
-	"gopkg.in/yaml.v2"
 )
 
 /*
 	Structs
 */
-
-type ProxyConfig struct {
-	Proxy struct {
-		Listen struct {
-			Address string `yaml:"address"`
-			Port    string `yaml:"port"`
-		} `yaml:"listen"`
-		Services []struct {
-			Name   string `yaml:"name"`
-			Domain string `yaml:"domain"`
-			Hosts  []struct {
-				Address string `yaml:"address"`
-				Port    string `yaml:"port"`
-			} `yaml:"hosts"`
-		} `yaml:"services"`
-	} `yaml:"proxy"`
-}
-
-// Generate config struct
-func GenerateConfig(c *ProxyConfig) {
-	filename, _ := filepath.Abs("config.yml")
-	yamlConfigFile, err := ioutil.ReadFile(filename)
-
-	fmt.Printf("Server config!! \n%s", yamlConfigFile)
-
-	if err != nil {
-		panic(err)
-	}
-
-	err = yaml.Unmarshal(yamlConfigFile, c)
-	if err != nil {
-		panic(err)
-	}
-}
 
 /*
 	Logging
@@ -77,7 +41,7 @@ func logRequestPayload(request *http.Request) {
 */
 
 // Serve a reverse proxy for a given url
-func serveReverseProxy(c *ProxyConfig, res http.ResponseWriter, req *http.Request) {
+func serveReverseProxy(srv map[string]*lb.RoundRobin, res http.ResponseWriter, req *http.Request) {
 
 	if req.Body != nil {
 		// requestPayload := parseRequestBody(req)
@@ -90,17 +54,13 @@ func serveReverseProxy(c *ProxyConfig, res http.ResponseWriter, req *http.Reques
 	var service string
 	rand.Seed(time.Now().UnixNano())
 	dom := strings.Split(url_.String(), ":")[0]
-	fmt.Println(dom[0])
-	for _, serv := range c.Proxy.Services {
-		if dom == serv.Domain {
-			backend := rand.Intn(len(serv.Hosts))
-			fmt.Println("Forward to service " + serv.Name)
-			service = serv.Hosts[backend].Address + ":" + serv.Hosts[backend].Port
-			break
-		}
-	}
+	fmt.Println(dom)
+	// choose backend with roundrobin
+
+	service = (*srv[dom]).Next()
 	fmt.Println("Service: " + service)
 	url_.Host = service
+
 	url_.Scheme = "http"
 	// create the reverse proxy
 	proxy := httputil.NewSingleHostReverseProxy(url_)
@@ -117,8 +77,8 @@ func serveReverseProxy(c *ProxyConfig, res http.ResponseWriter, req *http.Reques
 }
 
 // Given a request send it to the appropriate url
-func ProxyOperation(c *ProxyConfig) func(res http.ResponseWriter, req *http.Request) {
+func ProxyOperation(srv map[string]*lb.RoundRobin) func(res http.ResponseWriter, req *http.Request) {
 	return func(res http.ResponseWriter, req *http.Request) {
-		serveReverseProxy(c, res, req)
+		serveReverseProxy(srv, res, req)
 	}
 }
