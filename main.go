@@ -7,12 +7,14 @@ import (
 	"io/ioutil"
 	"net/http"
 	"path/filepath"
+	"time"
 
+	"github.com/patrickmn/go-cache"
 	"gopkg.in/yaml.v2"
 )
 
 /*
-	Utilities
+	Structs
 */
 
 type ProxyConfig struct {
@@ -63,6 +65,8 @@ func main() {
 
 	srv := make(map[string]*lb.RoundRobin, len(config.Proxy.Services))
 
+	// populate Services with each backends to be used
+	// with the LB
 	for _, s := range config.Proxy.Services {
 		hosts := make([]string, len(s.Hosts))
 		for i, h := range s.Hosts {
@@ -76,8 +80,11 @@ func main() {
 		}
 	}
 
+	// Create an intitia memory cache
+	var pageCache = cache.New(5*time.Minute, 10*time.Minute)
+
 	// start server
-	http.HandleFunc("/", proxy.ProxyOperation(srv))
+	http.HandleFunc("/", proxy.ProxyOperation(srv, pageCache))
 	if err := http.ListenAndServe(proxylisten, nil); err != nil {
 		panic(err)
 	}
