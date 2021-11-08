@@ -3,6 +3,7 @@ package proxy
 import (
 	"bytes"
 	"fmt"
+	"go-proxy/intercept"
 	"go-proxy/lb"
 	"io/ioutil"
 	"log"
@@ -13,10 +14,6 @@ import (
 
 	"github.com/patrickmn/go-cache"
 )
-
-/*
-	Logging
-*/
 
 // Log the typeform payload and redirect url
 func logRequestPayload(request *http.Request) {
@@ -53,10 +50,12 @@ func serveReverseProxy(srv map[string]*lb.RoundRobin, pcache *cache.Cache, res h
 
 	//Cache Hit
 	if found {
+		fmt.Printf("Cache hit for: %s", cache_key)
 		fmt.Fprintf(res, cachedResponse.(string))
-	} else { //Cache miss
-		// resp, err := http.Get(url)
 
+	} else { //Cache miss
+
+		// resp, err := http.Get(url)
 		// parse the url
 		url_, _ := url.Parse(req.Host)
 
@@ -68,8 +67,8 @@ func serveReverseProxy(srv map[string]*lb.RoundRobin, pcache *cache.Cache, res h
 		service = (*srv[dom]).Next()
 		fmt.Println("Service: " + service)
 		url_.Host = service
-
 		url_.Scheme = "http"
+
 		// create the reverse proxy
 		proxy := httputil.NewSingleHostReverseProxy(url_)
 
@@ -80,28 +79,9 @@ func serveReverseProxy(srv map[string]*lb.RoundRobin, pcache *cache.Cache, res h
 		// req.Host = url_.Host
 		fmt.Println("URL after: " + req.URL.String() + "\n")
 
-		var tmp_resp_w http.ResponseWriter
-		var tmp_resp http.Response
-
 		// Note that ServeHttp is non blocking and uses a go routine under the hood
-		// proxy.ServeHTTP(tmp_resp_w, req)
-		proxy.ServeHTTP(tmp_resp_w, req)
+		proxy.ServeHTTP(intercept.NewCustomWriter(res, pcache, cache_key), req)
 
-		// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-		// Here I need to capture the responceWriter body and first write to the cache
-		// bellow and then send it to the client!!!!!!
-
-		// defer resp.Body.Close()
-
-		bodyBytes, err := ioutil.ReadAll(tmp_resp.Body)
-		if err != nil {
-			log.Fatal(err)
-		}
-		bodyString := string(bodyBytes)
-
-		pcache.Set(cache_key, bodyString, cache.DefaultExpiration)
-
-		fmt.Fprintf(res, bodyString)
 	}
 
 }
