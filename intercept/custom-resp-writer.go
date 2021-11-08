@@ -23,7 +23,7 @@ func (c *customWriter) Header() http.Header {
 
 func (c *customWriter) Write(data []byte) (int, error) {
 
-	// First write the data to the cache and then return the responce to the client
+	// First write the body of the request to the cache and then return the responce to the client
 	c.pcache.Set(c.cache_key, string(data), cache.DefaultExpiration)
 
 	return c.ResponseWriter.Write(data)

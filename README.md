@@ -15,6 +15,7 @@ Sources used in this project:
 1. [Writing a Reverse Proxy in just one line with Go](https://hackernoon.com/writing-a-reverse-proxy-in-just-one-line-with-go-c1edfa78c84b)
 2. [hlts2/round-robin](https://github.com/hlts2/round-robin)
 3. [Learning Go Lang Days 13 to 18](https://medium.com/codex/learning-go-lang-days-13-to-18-building-a-caching-reverse-proxy-in-go-lang-a0965495c329)
+4. [ResponseWriter custom](https://stackoverflow.com/a/65895198/2766769)
 
 The above sources used as base for my code plus education purposes to really get the idea without any assumptions 
 

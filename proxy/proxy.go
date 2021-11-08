@@ -55,7 +55,6 @@ func serveReverseProxy(srv map[string]*lb.RoundRobin, pcache *cache.Cache, res h
 
 	} else { //Cache miss
 
-		// resp, err := http.Get(url)
 		// parse the url
 		url_, _ := url.Parse(req.Host)
 
@@ -76,7 +75,7 @@ func serveReverseProxy(srv map[string]*lb.RoundRobin, pcache *cache.Cache, res h
 		req.Header.Set("X-Forwarded-Host", dom)
 		req.URL.Host = url_.Host
 		req.URL.Scheme = url_.Scheme
-		// req.Host = url_.Host
+
 		fmt.Println("URL after: " + req.URL.String() + "\n")
 
 		// Note that ServeHttp is non blocking and uses a go routine under the hood
