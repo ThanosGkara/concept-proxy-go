@@ -78,3 +78,14 @@ proxy:
         - address: "127.0.0.1"
           port: 9092
 ```
+
+## Future Improvements
+
+* Add unit tests 
+* Add integration tests
+* Add proper logging with debug switch
+* Perform loadtesting
+* Add code versioning
+* Add toggle functionality to enable/disable cache/lb_strategy
+* Add health checks for the alive backends
+* Add toggle functionality to purge cache and/or change cache duration
