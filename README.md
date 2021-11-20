@@ -5,7 +5,7 @@
 The project tries to create a simple reverse proxy with two features. 
 
 1. Utilize round-robin loadbalancing
-2. Include an in-memory page cache. (Not working as for now!!!!)
+2. Include an in-memory page cache.
 
 It supports multiple clients that are able to communicate with multiple services, consisting of multiple backends each.
 
