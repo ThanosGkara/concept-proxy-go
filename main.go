@@ -1,9 +1,9 @@
 package main
 
 import (
+	"concept-proxy-go/lb"
+	"concept-proxy-go/proxy"
 	"fmt"
-	"go-proxy/lb"
-	"go-proxy/proxy"
 	"io/ioutil"
 	"net/http"
 	"path/filepath"

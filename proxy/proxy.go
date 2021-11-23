@@ -2,9 +2,9 @@ package proxy
 
 import (
 	"bytes"
+	"concept-proxy-go/intercept"
+	"concept-proxy-go/lb"
 	"fmt"
-	"go-proxy/intercept"
-	"go-proxy/lb"
 	"io/ioutil"
 	"log"
 	"net/http"

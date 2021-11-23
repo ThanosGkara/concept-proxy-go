@@ -1,4 +1,4 @@
-module go-proxy
+module concept-proxy-go
 
 go 1.16
 
